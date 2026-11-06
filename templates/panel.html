@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+{% block titulo %}Mi panel · Casero{% endblock %}
+{% block contenido %}
+<h1 id="saludo">Mi panel</h1>
+<div class="resumen-cajas">
+  <div class="caja-dato"><strong id="n-activos">0</strong>Productos activos</div>
+  <div class="caja-dato"><strong id="n-agotados">0</strong>Agotados</div>
+  <div class="caja-dato"><strong id="n-total">0</strong>Total publicados</div>
+</div>
+
+<section class="tarjeta-panel" style="margin-bottom:1.2rem">
+  <h2 id="titulo-form">Publicar producto</h2>
+  <div class="form-fila">
+    <div><label for="nombre">Nombre</label><input id="nombre" type="text"></div>
+    <div><label for="categoria">Categoría</label><select id="categoria"></select></div>
+    <div><label for="precio">Precio (Bs)</label><input id="precio" type="number" min="0" step="0.01"></div>
+    <div><label for="stock">Stock</label><input id="stock" type="number" min="0" step="1" value="1"></div>
+  </div>
+  <label for="descripcion">Descripción</label>
+  <textarea id="descripcion" rows="2"></textarea>
+  <label for="imagen">Enlace de la imagen (opcional)</label>
+  <input id="imagen" type="url" placeholder="https://...">
+  <p id="error" class="error"></p>
+  <button class="btn" id="btn-guardar">Publicar</button>
+  <button class="btn btn-sec" id="btn-cancelar" hidden>Cancelar edición</button>
+</section>
+
+<h2>Mis productos</h2>
+<div class="tabla-scroll">
+  <table>
+    <thead><tr><th>Producto</th><th>Categoría</th><th>Precio</th><th>Stock</th><th>Estado</th><th>Acciones</th></tr></thead>
+    <tbody id="filas"></tbody>
+  </table>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+(async function () {
+  const u = exigirRol("vendedor");
+  if (!u) return;
+  document.getElementById("saludo").textContent = "Hola, " + u.nombre.split(" ")[0];
+  let productos = [];
+  let editando = null;
+  const campo = (id) => document.getElementById(id);
+
+  async function cargar() {
+    productos = await api("GET", "/mis-productos");
+    campo("n-total").textContent = productos.length;
+    campo("n-activos").textContent = productos.filter((p) => p.disponible).length;
+    campo("n-agotados").textContent = productos.filter((p) => !p.disponible).length;
+    campo("filas").innerHTML = productos.length ? productos.map((p) => `<tr>
+      <td><a href="/producto/${p.id}">${esc(p.nombre)}</a></td><td>${esc(p.categoria)}</td><td>${bs(p.precio)}</td>
+      <td><span class="stock-ctrl"><button data-accion="menos" data-id="${p.id}" aria-label="Restar">−</button>${p.stock}<button data-accion="mas" data-id="${p.id}" aria-label="Sumar">+</button></span></td>
+      <td>${etiquetaEstado(p)}</td>
+      <td><button class="btn btn-sm btn-sec" data-accion="editar" data-id="${p.id}">Editar</button>
+          <button class="btn btn-sm btn-peligro" data-accion="eliminar" data-id="${p.id}">Eliminar</button></td></tr>`).join("")
+      : '<tr><td colspan="6" class="vacio">Aún no publicaste productos.</td></tr>';
+  }
+
+  function limpiarForm() {
+    editando = null;
+    ["nombre", "precio", "descripcion", "imagen"].forEach((id) => { campo(id).value = ""; });
+    campo("stock").value = 1;
+    campo("titulo-form").textContent = "Publicar producto";
+    campo("btn-guardar").textContent = "Publicar";
+    campo("btn-cancelar").hidden = true;
+    campo("error").textContent = "";
+  }
+
+  campo("btn-guardar").addEventListener("click", async () => {
+    campo("error").textContent = "";
+    const datos = {
+      nombre: campo("nombre").value, categoria_id: campo("categoria").value, precio: campo("precio").value,
+      stock: campo("stock").value, descripcion: campo("descripcion").value, imagen_url: campo("imagen").value,
+    };
+    try {
+      if (editando) await api("PUT", "/productos/" + editando, datos); else await api("POST", "/productos", datos);
+      aviso(editando ? "Producto actualizado" : "Producto publicado");
+      limpiarForm();
+      await cargar();
+    } catch (e) { campo("error").textContent = e.message; }
+  });
+  campo("btn-cancelar").addEventListener("click", limpiarForm);
+
+  campo("filas").addEventListener("click", async (ev) => {
+    const b = ev.target.closest("button[data-accion]");
+    if (!b) return;
+    const p = productos.find((x) => x.id === Number(b.dataset.id));
+    try {
+      if (b.dataset.accion === "editar") {
+        editando = p.id;
+        campo("nombre").value = p.nombre; campo("categoria").value = p.categoria_id; campo("precio").value = p.precio;
+        campo("stock").value = p.stock; campo("descripcion").value = p.descripcion; campo("imagen").value = p.imagen_url || "";
+        campo("titulo-form").textContent = "Editar producto";
+        campo("btn-guardar").textContent = "Guardar cambios";
+        campo("btn-cancelar").hidden = false;
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      } else if (b.dataset.accion === "eliminar") {
+        if (confirm("¿Eliminar «" + p.nombre + "»?")) { await api("DELETE", "/productos/" + p.id); aviso("Producto eliminado"); await cargar(); }
+      } else {
+        const nuevo = p.stock + (b.dataset.accion === "mas" ? 1 : -1);
+        if (nuevo >= 0) { await api("PATCH", `/productos/${p.id}/stock`, { stock: nuevo }); await cargar(); }
+      }
+    } catch (e) { aviso(e.message, true); }
+  });
+
+  try {
+    (await api("GET", "/categorias")).forEach((c) =>
+      campo("categoria").insertAdjacentHTML("beforeend", `<option value="${c.id}">${esc(c.nombre)}</option>`));
+    await cargar();
+  } catch (e) { aviso(e.message, true); }
+})();
+</script>
+{% endblock %}

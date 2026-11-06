@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block titulo %}Mis favoritos · Casero{% endblock %}
+{% block contenido %}
+<h1>Mis favoritos</h1>
+<p id="resumen" class="resumen"></p>
+<section id="grid" class="grid"></section>
+{% endblock %}
+{% block scripts %}
+<script>
+(async function () {
+  if (!exigirRol("comprador")) return;
+  const grid = document.getElementById("grid");
+  async function cargar() {
+    try {
+      const lista = await api("GET", "/favoritos");
+      document.getElementById("resumen").textContent = lista.length + " producto(s) guardado(s)";
+      grid.innerHTML = lista.length
+        ? lista.map((p) => tarjetaProducto(p, true, true)).join("")
+        : '<p class="vacio">Aún no tienes favoritos. <a href="/">Explora productos</a></p>';
+    } catch (e) { aviso(e.message, true); }
+  }
+  grid.addEventListener("click", async (ev) => {
+    const boton = ev.target.closest(".fav");
+    if (!boton) return;
+    try { await alternarFavorito(boton); await cargar(); } catch (e) { aviso(e.message, true); }
+  });
+  cargar();
+})();
+</script>
+{% endblock %}

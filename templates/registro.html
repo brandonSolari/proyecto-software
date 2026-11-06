@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block titulo %}Crear cuenta · Casero{% endblock %}
+{% block contenido %}
+<section class="tarjeta-panel caja-acceso">
+  <h1>Crea tu cuenta</h1>
+  <div class="selector-rol">
+    <label><input type="radio" name="rol" value="comprador" checked><span>Soy cliente</span></label>
+    <label><input type="radio" name="rol" value="vendedor"><span>Soy vendedor</span></label>
+  </div>
+  <label for="nombre">Nombre completo</label>
+  <input id="nombre" type="text" autocomplete="name">
+  <div id="bloque-negocio" hidden>
+    <label for="negocio">Nombre de tu negocio</label>
+    <input id="negocio" type="text">
+  </div>
+  <label for="correo">Correo electrónico</label>
+  <input id="correo" type="email" autocomplete="username">
+  <label for="password">Contraseña (mínimo 6 caracteres)</label>
+  <input id="password" type="password" autocomplete="new-password">
+  <p id="error" class="error"></p>
+  <button class="btn" id="btn-registrar" style="width:100%">Crear cuenta</button>
+  <p class="vendedor" style="margin-top:1rem">¿Ya tienes cuenta? <a href="/login">Inicia sesión</a></p>
+</section>
+{% endblock %}
+{% block scripts %}
+<script>
+(function () {
+  const rol = () => document.querySelector('input[name="rol"]:checked').value;
+  document.querySelectorAll('input[name="rol"]').forEach((r) => r.addEventListener("change", () => {
+    document.getElementById("bloque-negocio").hidden = rol() !== "vendedor";
+  }));
+  document.getElementById("btn-registrar").addEventListener("click", async () => {
+    const error = document.getElementById("error");
+    error.textContent = "";
+    try {
+      const r = await api("POST", "/auth/registro", {
+        nombre: document.getElementById("nombre").value,
+        correo: document.getElementById("correo").value,
+        password: document.getElementById("password").value,
+        rol: rol(),
+        nombre_negocio: document.getElementById("negocio").value,
+      });
+      Sesion.guardar(r.token, r.usuario);
+      location.href = r.usuario.rol === "vendedor" ? "/panel" : "/";
+    } catch (e) { error.textContent = e.message; }
+  });
+})();
+</script>
+{% endblock %}

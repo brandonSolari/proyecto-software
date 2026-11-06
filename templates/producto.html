@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block titulo %}Detalle del producto · Casero{% endblock %}
+{% block contenido %}
+<div id="detalle" data-id="{{ producto_id }}"><p class="vacio">Cargando…</p></div>
+{% endblock %}
+{% block scripts %}
+<script>
+(async function () {
+  const cont = document.getElementById("detalle");
+  const u = Sesion.usuario();
+  try {
+    const p = await api("GET", "/productos/" + cont.dataset.id);
+    let favorito = false;
+    if (u && u.rol === "comprador") {
+      favorito = (await api("GET", "/favoritos")).some((f) => f.id === p.id);
+    }
+    const esComprador = !u || u.rol === "comprador";
+    cont.innerHTML = `<div class="detalle">
+      <div class="imagen">${imagenProducto(p)}</div>
+      <div>
+        <p class="vendedor"><a href="/?categoria=${p.categoria_id}">${esc(p.categoria)}</a> · Vendedor: <a href="/?vendedor=${p.vendedor_id}">${esc(p.vendedor)}</a></p>
+        <h1>${esc(p.nombre)}</h1>
+        <div class="precio-grande">${bs(p.precio)}</div>
+        <p>${etiquetaEstado(p)} · ${p.stock} en stock</p>
+        <p>${esc(p.descripcion) || "Sin descripción."}</p>
+        <div class="acciones">
+          ${esComprador ? `<button class="btn" id="btn-consultar">Consultar al vendedor</button>
+          <button class="btn btn-sec fav-detalle" id="btn-fav" data-id="${p.id}">${favorito ? "♥ En favoritos" : "♡ Guardar en favoritos"}</button>` : ""}
+        </div>
+      </div></div>`;
+    document.title = p.nombre + " · Casero";
+
+    const consultar = document.getElementById("btn-consultar");
+    if (consultar) consultar.addEventListener("click", async () => {
+      if (!Sesion.token()) { location.href = "/login"; return; }
+      try {
+        const r = await api("POST", "/conversaciones", { vendedor_id: p.vendedor_id });
+        location.href = `/chat?c=${r.id}&p=${p.id}`;
+      } catch (e) { aviso(e.message, true); }
+    });
+    const botonFav = document.getElementById("btn-fav");
+    if (botonFav) botonFav.addEventListener("click", async () => {
+      if (!Sesion.token()) { location.href = "/login"; return; }
+      try {
+        if (favorito) await api("DELETE", "/favoritos/" + p.id); else await api("PUT", "/favoritos/" + p.id);
+        favorito = !favorito;
+        botonFav.textContent = favorito ? "♥ En favoritos" : "♡ Guardar en favoritos";
+        aviso(favorito ? "Guardado en favoritos" : "Quitado de favoritos");
+      } catch (e) { aviso(e.message, true); }
+    });
+  } catch (e) {
+    cont.innerHTML = `<p class="vacio">${esc(e.message)} · <a href="/">Volver al inicio</a></p>`;
+  }
+})();
+</script>
+{% endblock %}

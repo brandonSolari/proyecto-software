@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block titulo %}Iniciar sesión · Casero{% endblock %}
+{% block contenido %}
+<section class="tarjeta-panel caja-acceso">
+  <h1>Bienvenido a Casero</h1>
+  <p class="vendedor">Ingresa a tu cuenta para continuar</p>
+  <label for="correo">Correo electrónico</label>
+  <input id="correo" type="email" autocomplete="username">
+  <label for="password">Contraseña</label>
+  <input id="password" type="password" autocomplete="current-password">
+  <p id="error" class="error"></p>
+  <button class="btn" id="btn-entrar" style="width:100%">Iniciar sesión</button>
+  <p class="vendedor" style="margin-top:1rem">¿Aún no tienes una cuenta? <a href="/registro">Regístrate aquí</a></p>
+</section>
+{% endblock %}
+{% block scripts %}
+<script>
+(function () {
+  const error = document.getElementById("error");
+  async function entrar() {
+    error.textContent = "";
+    try {
+      const r = await api("POST", "/auth/login", {
+        correo: document.getElementById("correo").value,
+        password: document.getElementById("password").value,
+      });
+      Sesion.guardar(r.token, r.usuario);
+      location.href = { vendedor: "/panel", administrador: "/admin" }[r.usuario.rol] || "/";
+    } catch (e) { error.textContent = e.message; }
+  }
+  document.getElementById("btn-entrar").addEventListener("click", entrar);
+  document.getElementById("password").addEventListener("keydown", (ev) => { if (ev.key === "Enter") entrar(); });
+})();
+</script>
+{% endblock %}

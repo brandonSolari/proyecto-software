@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block titulo %}Usuarios · Casero{% endblock %}
+{% block contenido %}
+<h1>Administración de usuarios</h1>
+<div class="tabla-scroll">
+  <table>
+    <thead><tr><th>#</th><th>Nombre</th><th>Correo</th><th>Rol</th><th>Negocio</th><th>Estado</th><th>Acción</th></tr></thead>
+    <tbody id="filas"></tbody>
+  </table>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+(async function () {
+  const yo = exigirRol("administrador");
+  if (!yo) return;
+  const filas = document.getElementById("filas");
+  async function cargar() {
+    const lista = await api("GET", "/admin/usuarios");
+    filas.innerHTML = lista.map((u) => `<tr>
+      <td>${u.id}</td><td>${esc(u.nombre)}</td><td>${esc(u.correo)}</td><td>${esc(u.rol)}</td><td>${esc(u.nombre_negocio || "—")}</td>
+      <td>${u.activo ? '<span class="estado ok">Activo</span>' : '<span class="estado no">Desactivado</span>'}</td>
+      <td>${u.id === yo.id ? "—" : `<button class="btn btn-sm ${u.activo ? "btn-peligro" : ""}" data-id="${u.id}" data-activo="${u.activo ? 0 : 1}">${u.activo ? "Desactivar" : "Activar"}</button>`}</td></tr>`).join("");
+  }
+  filas.addEventListener("click", async (ev) => {
+    const b = ev.target.closest("button[data-id]");
+    if (!b) return;
+    try {
+      await api("PATCH", `/admin/usuarios/${b.dataset.id}/estado`, { activo: b.dataset.activo === "1" });
+      aviso("Estado actualizado");
+      await cargar();
+    } catch (e) { aviso(e.message, true); }
+  });
+  try { await cargar(); } catch (e) { aviso(e.message, true); }
+})();
+</script>
+{% endblock %}

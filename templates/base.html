@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block titulo %}Casero{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+  <header class="cabecera">
+    <a class="logo" href="/">🦙 casero</a>
+    <form class="buscador" action="/" method="get">
+      <input id="q-global" name="q" type="search" placeholder="¿Qué estás buscando?">
+    </form>
+    <nav id="nav"></nav>
+  </header>
+  <main class="contenedor">
+    {% block contenido %}{% endblock %}
+  </main>
+  <footer class="pie">© 2026 Casero · Términos · Privacidad</footer>
+  <div id="aviso" class="aviso" hidden></div>
+  <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+  <script>renderNav();</script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

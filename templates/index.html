@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block titulo %}Casero · Compra y vende fácil{% endblock %}
+{% block contenido %}
+<section class="hero">
+  <h1>Descubre productos locales</h1>
+  <p>Conecta con vendedores, consulta por chat y guarda tus favoritos.</p>
+</section>
+<section class="filtros">
+  <div id="chips" class="chips"></div>
+  <select id="filtro-vendedor" aria-label="Filtrar por vendedor"><option value="">Todos los vendedores</option></select>
+</section>
+<p id="resumen" class="resumen"></p>
+<section id="grid" class="grid"></section>
+{% endblock %}
+{% block scripts %}
+<script>
+(async function () {
+  const params = new URLSearchParams(location.search);
+  const estado = { q: params.get("q") || "", categoria: params.get("categoria") || "", vendedor: params.get("vendedor") || "" };
+  const u = Sesion.usuario();
+  const puedeFavorito = !u || u.rol === "comprador";
+  let favoritos = new Set();
+  const grid = document.getElementById("grid");
+
+  async function cargarProductos() {
+    const qs = new URLSearchParams();
+    Object.entries(estado).forEach(([k, v]) => { if (v) qs.set(k, v); });
+    const lista = await api("GET", "/productos?" + qs.toString());
+    document.getElementById("resumen").textContent =
+      lista.length + (lista.length === 1 ? " producto encontrado" : " productos encontrados");
+    grid.innerHTML = lista.length
+      ? lista.map((p) => tarjetaProducto(p, favoritos.has(p.id), puedeFavorito)).join("")
+      : '<p class="vacio">No encontramos productos con esos filtros.</p>';
+  }
+
+  function dibujarChips(categorias) {
+    const todas = [{ id: "", nombre: "Todas" }].concat(categorias);
+    const cont = document.getElementById("chips");
+    cont.innerHTML = todas.map((c) =>
+      `<button class="chip ${String(c.id) === estado.categoria ? "activo" : ""}" data-id="${c.id}">${esc(c.nombre)}</button>`).join("");
+    cont.querySelectorAll(".chip").forEach((b) => b.addEventListener("click", () => {
+      estado.categoria = b.dataset.id;
+      dibujarChips(categorias);
+      cargarProductos();
+    }));
+  }
+
+  try {
+    if (u && u.rol === "comprador") {
+      (await api("GET", "/favoritos")).forEach((p) => favoritos.add(p.id));
+    }
+    dibujarChips(await api("GET", "/categorias"));
+    const selector = document.getElementById("filtro-vendedor");
+    (await api("GET", "/vendedores")).forEach((v) => {
+      selector.insertAdjacentHTML("beforeend",
+        `<option value="${v.id}" ${String(v.id) === estado.vendedor ? "selected" : ""}>${esc(v.nombre)} (${v.total_productos})</option>`);
+    });
+    selector.addEventListener("change", () => { estado.vendedor = selector.value; cargarProductos(); });
+    await cargarProductos();
+  } catch (e) { aviso(e.message, true); }
+
+  grid.addEventListener("click", async (ev) => {
+    const boton = ev.target.closest(".fav");
+    if (!boton) return;
+    try { await alternarFavorito(boton); } catch (e) { aviso(e.message, true); }
+  });
+})();
+</script>
+{% endblock %}

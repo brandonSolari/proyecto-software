@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% block titulo %}Mensajes · Casero{% endblock %}
+{% block contenido %}
+<section class="chat">
+  <aside class="chat-lista">
+    <h2>Mensajes</h2>
+    <div id="lista"></div>
+  </aside>
+  <div class="chat-hilo">
+    <div class="chat-cabecera" id="cabecera">Selecciona una conversación</div>
+    <div class="mensajes" id="mensajes"></div>
+    <form class="chat-form" id="form" hidden>
+      <input id="texto" type="text" maxlength="500" placeholder="Escribe un mensaje" autocomplete="off">
+      <button class="btn" type="submit">Enviar</button>
+    </form>
+  </div>
+</section>
+{% endblock %}
+{% block scripts %}
+<script>
+(async function () {
+  const yo = exigirRol("comprador", "vendedor");
+  if (!yo) return;
+  const params = new URLSearchParams(location.search);
+  const productoId = params.get("p") ? Number(params.get("p")) : null;
+  let actual = null, ultimoId = 0, temporizador = null, conversaciones = [];
+  const cont = document.getElementById("mensajes");
+
+  function dibujarMensaje(m) {
+    const hora = (m.fecha_envio || "").slice(11, 16);
+    const marca = m.es_automatico ? " · respuesta automática" : "";
+    cont.insertAdjacentHTML("beforeend",
+      `<div class="burbuja ${m.emisor_id === yo.id ? "mio" : ""} ${m.es_automatico ? "auto" : ""}">${esc(m.contenido)}<span class="meta">${hora}${marca}</span></div>`);
+  }
+  function agregar(lista) {
+    let hubo = false;
+    lista.forEach((m) => { if (m.id > ultimoId) { dibujarMensaje(m); ultimoId = m.id; hubo = true; } });
+    if (hubo) cont.scrollTop = cont.scrollHeight;
+  }
+
+  async function cargarLista() {
+    conversaciones = await api("GET", "/conversaciones");
+    document.getElementById("lista").innerHTML = conversaciones.length
+      ? conversaciones.map((c) => `<div class="conv ${c.id === actual ? "activa" : ""}" data-id="${c.id}"><strong>${esc(c.interlocutor)}</strong><small>${esc(c.ultimo_mensaje || "Sin mensajes")}</small></div>`).join("")
+      : '<p class="vacio">Aún no tienes conversaciones.</p>';
+  }
+
+  async function abrir(id) {
+    actual = id; ultimoId = 0; cont.innerHTML = "";
+    clearInterval(temporizador);
+    const conv = conversaciones.find((c) => c.id === id);
+    let detalle = "";
+    if (productoId) {
+      try { const p = await api("GET", "/productos/" + productoId); detalle = `<small>Consultando: ${esc(p.nombre)} · ${bs(p.precio)}</small>`; } catch (e) { /* sin producto */ }
+    }
+    document.getElementById("cabecera").innerHTML = esc(conv ? conv.interlocutor : "Conversación") + detalle;
+    document.getElementById("form").hidden = false;
+    agregar(await api("GET", `/conversaciones/${id}/mensajes?desde=0`));
+    temporizador = setInterval(async () => {   // consulta nuevos mensajes cada 3 s
+      try { agregar(await api("GET", `/conversaciones/${id}/mensajes?desde=${ultimoId}`)); } catch (e) { /* reintenta */ }
+    }, 3000);
+    await cargarLista();
+  }
+
+  document.getElementById("lista").addEventListener("click", (ev) => {
+    const c = ev.target.closest(".conv");
+    if (c) abrir(Number(c.dataset.id));
+  });
+  document.getElementById("form").addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    const caja = document.getElementById("texto");
+    const contenido = caja.value.trim();
+    if (!contenido) return;
+    try {
+      const r = await api("POST", `/conversaciones/${actual}/mensajes`, { contenido, producto_id: productoId });
+      caja.value = "";
+      agregar(r.mensajes);
+      await cargarLista();
+    } catch (e) { aviso(e.message, true); }
+  });
+
+  try {
+    await cargarLista();
+    const pedida = Number(params.get("c"));
+    const primera = conversaciones.find((c) => c.id === pedida) || conversaciones[0];
+    if (primera) await abrir(primera.id);
+  } catch (e) { aviso(e.message, true); }
+})();
+</script>
+{% endblock %}
